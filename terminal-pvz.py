@@ -1,19 +1,30 @@
-from rich import print
+# from rich import print
 from time import sleep
 from pynput import keyboard
+from cursor_utils import hide_cursor, show_cursor
 
 CANVAS_HEIGHT = 5
 CANVAS_WIDTH = 10
+EMPTY_CHAR = "  "
 
-canvas = [[" " for _ in range(CANVAS_WIDTH)] for _ in range(CANVAS_HEIGHT)]
+STARTING_SUN = 50
+
+canvas = [[EMPTY_CHAR for _ in range(CANVAS_WIDTH)] for _ in range(CANVAS_HEIGHT)]
 
 entities = []
+
+global cursor_travel_count
+cursor_travel_count = 0
+
+global sun
+sun = STARTING_SUN
 
 class Entity:
     def __init__(self, health, representation, position):
         self.health = health
         self.representation = representation
         self.position: list[int] = position
+        self.tick_count = 0
 
 class Zombie(Entity):
     def __init__(self, position):
@@ -23,6 +34,7 @@ class Zombie(Entity):
     
     def tick(self):
         blocked = False
+        self.tick_count += 1
         for entity in entities:
             if isinstance(entity, Plant):
                 if entity.position[0] == self.position[0] - 1:
@@ -30,8 +42,9 @@ class Zombie(Entity):
                     entity.health -= 10
                     if entity.health <= 0:
                         entities.remove(entity) 
-        if not blocked:      
-            self.position[0] -= 1
+        if not blocked:
+            if self.tick_count % 10 == 0:     
+                self.position[0] -= 1
         
 class Plant(Entity):
     def __init__(self, health, representation, position):
@@ -84,12 +97,23 @@ class Cursor:
         self.position[0] += x
         self.position[1] += y
         
-
+cursor = Cursor([0, 0])
+        
+# on key press, move the cursor
+def on_press(key):
+    if key == keyboard.Key.up:
+        cursor.move(0, -1)
+    elif key == keyboard.Key.down:
+        cursor.move(0, 1)
+    elif key == keyboard.Key.left:
+        cursor.move(-1, 0)
+    elif key == keyboard.Key.right:
+        cursor.move(1, 0)
         
 def clear_canvas(canvas):
     for row in canvas:
         for i in range(len(row)):
-            row[i] = " "
+            row[i] = EMPTY_CHAR
     
         
 def update_canvas(canvas, entities):
@@ -100,26 +124,41 @@ def update_canvas(canvas, entities):
         canvas[y][x] = entity.representation
         entity.tick()
         
+    # draw cursor
+    x, y = cursor.position
+    canvas[y][x] = " X"
+    
+def reset_cursor_position():
+    print("\033[A" * cursor_travel_count, end="") 
+        
 def print_canvas(canvas):
-    # clear the terminal
-    print("\033c", end="")
+    # print("\033c", end="")
+    
+    cursor_travel_count = cursor_travel_count + CANVAS_HEIGHT
+    
     for row in canvas:
         print("".join(row))
+        
+def print_stats(sun):
+    stats_str = f"☀️: {sun}" 
+    print(stats_str)
+    print("‾" * len(stats_str))
 
 def main():
+    hide_cursor()    
     
-    
-    entities.append(Zombie([9, 2]))
-    entities.append(Sunflower([0, 2]))
-    entities.append(Peashooter([2, 2]))
-    entities.append(Wallnut([4, 2]))
-    entities.append(Pea([3, 2]))
-    
-    for _ in range(10):
-        update_canvas(canvas, entities)
-        print_canvas(canvas)
-        sleep(1)
-        print("\n" * CANVAS_HEIGHT)
+    with keyboard.Listener(on_press=on_press) as listener:
+        entities.append(Zombie([9, 2]))
+        entities.append(Sunflower([0, 2]))
+        entities.append(Peashooter([2, 2]))
+        entities.append(Wallnut([4, 2]))
+        entities.append(Pea([3, 2]))
+        
+        for _ in range(100):
+            update_canvas(canvas, entities)
+            print_stats(sun)
+            print_canvas(canvas)
+            sleep(0.2)
     
 if __name__ == "__main__":
     main()
